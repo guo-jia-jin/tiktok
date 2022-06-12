@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -59,35 +60,76 @@ func (us *User_ServerImp) Login(userLogInfo *request.UserRequest) (user *dao.Use
 }
 
 func (us *User_ServerImp) GetUserPageInfo(user_id uint64) (userPageInfo *server.UserPageInfo, err error) {
-	var user *dao.User
 	var relation_serverImp Relation_ServerImp
 	var favorite_serverImp Favorite_ServerImp
-	//获取user
-	user, err = user.GetUserByID(user_id)
-	if err != nil {
-		return userPageInfo, err
-	}
-	//通过user获取用户名
-	userName := user.Name
+	//创建协程组，当这一组的协程全部完成，才会结束本方法
+	var wg sync.WaitGroup
+	wg.Add(4)                      //等待协程数
+	errChan := make(chan error, 3) //记录主要协程发生错误的协程
+	//获取user用于组装返回体的协程
+	var user *dao.User
+	go func() {
+		defer wg.Done()
+		user, err = user.GetUserByID(user_id)
+		if err != nil {
+			log.Println("user_severImp->GetUserPageInfo->in goroutine-1 happened err:", err.Error())
+			errChan <- err
+		}
+	}()
+	//获取userInfo用于组装返回体的协程
 	var userInfo *dao.UserInfo
-	//获取userInfo用于组装返回体
-	userInfo, err = userInfo.GetUserInfoByID(user_id)
-	//生成userInfo中的可访问url
-	var server_utils Server_Utils
-	userInfo.Avatar = server_utils.UrlUnParse(userInfo.Avatar)
-	userInfo.Background = server_utils.UrlUnParse(userInfo.Background)
-	if err != nil {
-		return userPageInfo, err
+	go func() {
+		defer wg.Done()
+		userInfo, err = userInfo.GetUserInfoByID(user_id)
+		if err != nil {
+			log.Println("user_severImp->GetUserPageInfo->in goroutine-2 happened err:", err.Error())
+			errChan <- err
+		} else {
+			//生成userInfo中的可访问url
+			var server_utils Server_Utils
+			userInfo.Avatar = server_utils.UrlUnParse(userInfo.Avatar)
+			userInfo.Background = server_utils.UrlUnParse(userInfo.Background)
+		}
+	}()
+	//获取follow_conut和follower_count的协程
+	var follow_count int64
+	var follower_count int64
+	go func() {
+		defer wg.Done()
+		var e error
+		follow_count, e = relation_serverImp.GetFollowCount(user_id)
+		follower_count, e = relation_serverImp.GetFollowerCount(user_id)
+		if e != nil {
+			log.Println("user_severImp->GetUserPageInfo->in goroutine-3 happened err:", err.Error())
+		}
+	}()
+	var favorite_count int64
+	var total_favorite int64
+	//获取favorite_count和total_favorite的协程
+	go func() {
+		defer wg.Done()
+		var e error
+		favorite_count, e = favorite_serverImp.UserFavoriteCount(user_id)
+		total_favorite, e = favorite_serverImp.TotalUserFavorite(user_id)
+		if e != nil {
+			log.Println("user_severImp->GetUserPageInfo->in goroutine-4 happened err:", err.Error())
+		}
+	}()
+	//等待上方4个协程结束
+	go func() {
+		defer close(errChan)
+		//log.Println("wait")
+		wg.Wait()
+	}()
+	for e := range errChan {
+		if e != nil {
+			return nil, e
+		}
 	}
-	//获取follow_conut和follower_count
-	follow_count, err := relation_serverImp.GetFollowCount(user_id)
-	follower_count, err := relation_serverImp.GetFollowerCount(user_id)
-	favorite_count, err := favorite_serverImp.UserFavoriteCount(user_id)
-	total_favorite, err := favorite_serverImp.TotalUserFavorite(user_id)
 	//组装数据
 	userPageInfo = &server.UserPageInfo{
 		UserInfo:       *userInfo,
-		Name:           userName,
+		Name:           user.Name,
 		Follow_Count:   follow_count,
 		Follower_Count: follower_count,
 		FavoriteCount:  favorite_count,

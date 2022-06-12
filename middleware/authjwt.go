@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,11 +31,9 @@ func AuthLogin() gin.HandlerFunc {
 			})
 		} else {
 			//log.Println("Token OK")
-			//fmt.Printf("tokenClaim.BaseClaims.User_Id: %v\n", tokenClaim.BaseClaims.User_Id)
-			log.Println("id", tokenClaim.User_Id)
-			//log.Println("id", tokenClaim.User_Name)
+			//log.Println("id", tokenClaim.User_Id)
+			//log.Println("userName", tokenClaim.User_Name)
 			c.Set("userId", tokenClaim.User_Id)
-			//c.Set("userName", tokenClaim.User_Name)
 		}
 		c.Next()
 	}

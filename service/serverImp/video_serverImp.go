@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -50,37 +51,70 @@ func (vi *Video_ServerImp) ProcessVideos(videos *[]server.VideoPageInfo, videoLi
 }
 
 func (vi *Video_ServerImp) InsertVeidoPageInfo(videoPage *server.VideoPageInfo, video *dao.Video, user_id uint64) (err error) {
-	//到时候可以加入协程
 	//获取所需的外部服务
 	var server_utils Server_Utils
 	var comment_serverImp Comment_ServerImp
 	var relation_serverImp Relation_ServerImp
 	var favorite_serverImp Favorite_ServerImp
-	//组装video
-	video.Playurl = server_utils.UrlUnParse(video.Playurl)
-	video.Coverurl = server_utils.UrlUnParse(video.Coverurl)
-	//组装videoPage
-	com_count, err := comment_serverImp.CountByVideoID(video.ID)
-	if err != nil {
-		log.Println("获取count失败:", err.Error())
-		err = nil
-	}
-	videoPage.Favorite_Count, err = favorite_serverImp.VideoFvaoriteCount(video.ID)
-	if err != nil {
-		log.Println("获取Favorite_Count失败:", err.Error())
-		err = nil
-	}
-	if err != nil {
-		return err
-	}
-	videoPage.Video = *video
-	videoPage.Comment_Count = com_count
-	//组装Author
 	var user_severImp User_ServerImp
-	author, err := user_severImp.GetUserPageInfo(uint64(video.UserID))
-	videoPage.Author = *author
-	work_count, _ := vi.PublishCount(uint64(video.UserID))
-	videoPage.Author.WorkCount = work_count
+	//创建协程组，当这一组的协程全部完成，才会结束本方法
+	var wg sync.WaitGroup
+	wg.Add(5)
+	errChan := make(chan error, 2)
+	//组装video中的url的1个协程
+	go func() {
+		defer wg.Done()
+		video.Playurl = server_utils.UrlUnParse(video.Playurl)
+		video.Coverurl = server_utils.UrlUnParse(video.Coverurl)
+		videoPage.Video = *video
+		// fmt.Printf("video.Playurl: %v\n", video.Playurl)
+		// fmt.Printf("video.Coverurl: %v\n", video.Coverurl)
+	}()
+	//组装videoPage的4个协程
+	go func() {
+		defer wg.Done()
+		videoPage.Comment_Count, err = comment_serverImp.CountByVideoID(video.ID)
+		if err != nil {
+			log.Println("获取count失败:", err.Error())
+			err = nil
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		videoPage.Favorite_Count, err = favorite_serverImp.VideoFvaoriteCount(video.ID)
+		if err != nil {
+			log.Println("获取Favorite_Count失败:", err.Error())
+			err = nil
+		}
+	}()
+	//组装Author
+	go func() {
+		defer wg.Done()
+		author, e := user_severImp.GetUserPageInfo(uint64(video.UserID))
+		videoPage.Author = *author
+		if e != nil {
+			log.Println("获取user信息失败:", err.Error())
+			errChan <- e
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		videoPage.Author.WorkCount, err = vi.PublishCount(uint64(video.UserID))
+		if err != nil {
+			log.Println("获取WorkCount失败:", err.Error())
+			err = nil
+		}
+	}()
+	//等待上面的5个协程结束
+	go func() {
+		defer close(errChan)
+		wg.Wait()
+	}()
+	for e := range errChan {
+		if e != nil {
+			return e
+		}
+	}
 	//组装需要关联用户的信息
 	if user_id != 0 && user_id != uint64(video.UserID) {
 		isFollow, err := relation_serverImp.IsFollow(user_id, uint64(video.UserID))

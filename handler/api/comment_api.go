@@ -3,7 +3,6 @@ package api
 import (
 	"Tiktok/dao"
 	"Tiktok/handler/response"
-	"log"
 	"strconv"
 	"time"
 
@@ -48,12 +47,10 @@ func (co *CommentApi) CommentAction(c *gin.Context) {
 
 // @Router /douyin/comment/list/
 func (co *CommentApi) CommentList(c *gin.Context) {
-	userId := c.GetString("userId")
-	videoId := c.Query("video_id")
-	log.Println("user_id:", userId)
-	log.Println("video_id:", videoId)
-	user_id, _ := strconv.ParseUint(userId, 10, 64)
-	video_id, _ := strconv.ParseUint(videoId, 10, 64)
+	user_id := uint64(c.GetInt64("userId"))
+	//log.Println("user_id:", user_id)
+	//log.Println("video_id:", videoId)
+	video_id, _ := strconv.ParseUint(c.Query("video_id"), 10, 64)
 	commentList, err := commentService.GetCommentList(video_id, user_id)
 	if err != nil {
 		response.ErrCodeWithMess("评论加载失败", c)
