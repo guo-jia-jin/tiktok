@@ -51,7 +51,16 @@ func (c *Comment) DeleteCommentByID(commId uint64) (err error) {
 	}
 	return err
 }
-
+func (c *Comment) GetCommentAuthorID(commId uint64) (user_id uint64, err error) {
+	err = global.GVA_DB.Model(Comment{}).Where("id = ?", commId).
+		Pluck("user_id", &user_id).Error
+	if err != nil {
+		log.Println("Comment_Dao-GetCommentAuthorID:failed")
+		log.Println("err:", err.Error())
+		return user_id, errors.New("get user_id failed")
+	}
+	return user_id, err
+}
 func (c *Comment) GetCommentListByVideoID(videoId uint64) (commentList *[]Comment, err error) {
 	err = global.GVA_DB.Model(Comment{}).Where(map[string]interface{}{"video_id": videoId}).
 		Find(&commentList).Order("create_date desc").Error

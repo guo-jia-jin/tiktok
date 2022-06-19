@@ -15,9 +15,8 @@ type CommentApi struct {
 // @Router /douyin/comment/action/
 func (co *CommentApi) CommentAction(c *gin.Context) {
 	actionType := c.Query("action_type")
+	user_id := uint64(c.GetInt64("userId"))
 	if actionType == "1" {
-		userId := c.GetInt64("userId")
-		user_id := uint64(userId)
 		video_id, _ := strconv.ParseUint(c.Query("video_id"), 10, 64)
 		comment_text := c.Query("comment_text")
 		comment := dao.Comment{
@@ -34,8 +33,10 @@ func (co *CommentApi) CommentAction(c *gin.Context) {
 		}
 	} else if actionType == "2" {
 		comment_id, _ := strconv.ParseUint(c.Query("comment_id"), 10, 64)
-		err := commentService.DelCommentByID(comment_id)
-		if err != nil {
+		err := commentService.DelCommentByID(comment_id, user_id)
+		if err != nil && err.Error() == "Permission denied" {
+			response.ErrCodeWithMess("非评论作者", c)
+		} else if err != nil {
 			response.ErrCodeWithMess("评论删除失败", c)
 		} else {
 			response.OKCodeWithMess("评论删除成功", c)

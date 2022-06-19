@@ -15,7 +15,7 @@ func (co *CommentRouter) InitCommentRouter(Router *gin.RouterGroup) (R gin.IRout
 	commentApi := handler.ApiGroupApp.ApiGroup.CommentApi
 	{
 		commentRouter.POST("action/", middleware.AuthLogin(), commentApi.CommentAction)
-		commentRouter.GET("list/", middleware.AuthLogin(), commentApi.CommentList)
+		commentRouter.GET("list/", middleware.AuthWithOutLogin(), commentApi.CommentList)
 	}
 	return commentRouter
 }

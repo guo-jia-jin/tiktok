@@ -3,6 +3,8 @@ package serverimp
 import (
 	"Tiktok/dao"
 	"Tiktok/service/server"
+	"errors"
+	"log"
 )
 
 type Comment_ServerImp struct {
@@ -40,7 +42,15 @@ func (co *Comment_ServerImp) SendComment(comment *dao.Comment) (comInfo server.C
 	return comInfo, err
 }
 
-func (co *Comment_ServerImp) DelCommentByID(comment_id uint64) (err error) {
+func (co *Comment_ServerImp) DelCommentByID(comment_id uint64, userId uint64) (err error) {
+	user_id, err := comDao.GetCommentAuthorID(comment_id)
+	if err != nil {
+		log.Println("DelCommentByID->GetCommentAuthorID failed err:", err.Error())
+		return err
+	}
+	if userId != user_id {
+		return errors.New("Permission denied")
+	}
 	err = comDao.DeleteCommentByID(comment_id)
 	if err != nil {
 		return err

@@ -8,7 +8,7 @@ type Comment_Server interface {
 	//发表评论
 	SendComment(comment *dao.Comment) (CommentInfo, error)
 	//删除评论
-	DelCommentByID(comment_id uint64) error
+	DelCommentByID(comment_id uint64, userId uint64) error
 	//获取视频评论列表
 	GetCommentList(video_id uint64, user_id uint64) ([]CommentInfo, error)
 }
